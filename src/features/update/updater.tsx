@@ -11,6 +11,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent } from "@tauri-apps/plugin-updater";
 
 import { parseError } from "@/lib/error";
+import { isBrowserMode } from "@/lib/apiClient";
 
 export type UpdateStatus =
   | "idle"
@@ -130,6 +131,9 @@ export function UpdaterProvider({ children }: UpdaterProviderProps) {
       }));
 
       try {
+        if (isBrowserMode) {
+          throw new Error("浏览器模式下不支持应用内更新，请直接拉取最新前端代码或使用桌面端更新。")
+        }
         const proxy = state.appProxyUrl.trim();
         const result = await check(proxy ? { proxy } : undefined);
         setState((prev) => ({
@@ -151,6 +155,14 @@ export function UpdaterProvider({ children }: UpdaterProviderProps) {
   );
 
   const downloadAndInstall = useCallback(async () => {
+    if (isBrowserMode) {
+      setState((prev) => ({
+        ...prev,
+        status: "error",
+        statusMessage: "浏览器模式下不支持应用内安装更新，请直接更新部署源码。",
+      }));
+      return;
+    }
     const updateHandle = state.updateHandle;
     if (!updateHandle) {
       return;
@@ -209,6 +221,13 @@ export function UpdaterProvider({ children }: UpdaterProviderProps) {
 
   const relaunchApp = useCallback(async () => {
     setState((prev) => ({ ...prev, statusMessage: "" }));
+    if (isBrowserMode) {
+      setState((prev) => ({
+        ...prev,
+        statusMessage: "浏览器模式下不支持重启应用。",
+      }));
+      return;
+    }
     try {
       // Best-effort graceful shutdown before relaunching.
       try {

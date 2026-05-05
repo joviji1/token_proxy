@@ -25,6 +25,7 @@ import {
   type UpdateInfo,
   type UpdateStatus,
 } from "@/features/update/updater";
+import { isBrowserMode } from "@/lib/apiClient";
 import { m } from "@/paraglide/messages.js";
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
@@ -74,6 +75,12 @@ function useAppVersion() {
 
   useEffect(() => {
     let cancelled = false;
+    if (isBrowserMode) {
+      setCurrentVersion("browser");
+      return () => {
+        cancelled = true;
+      };
+    }
     void getVersion()
       .then((version) => {
         if (!cancelled) {

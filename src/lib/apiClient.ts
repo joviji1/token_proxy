@@ -205,6 +205,99 @@ type ProviderAccountsPage = {
   page_size: number;
 };
 
+type LegacyConfigPayload = {
+  addr?: string;
+  port?: number;
+  logLevel?: string;
+  retryableFailureCooldown?: number;
+  upstreams?: unknown;
+  [key: string]: unknown;
+};
+
+type LegacyHealthPayload = {
+  proxy_state?: string;
+  proxy_addr?: string | null;
+  proxy_last_error?: string | null;
+  [key: string]: unknown;
+};
+
+function normalizeLogLevel(value: unknown) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (['silent', 'error', 'warn', 'info', 'debug', 'trace'].includes(raw)) {
+    return raw;
+  }
+  return 'silent';
+}
+
+function normalizeLegacyConfig(raw: unknown) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      path: 'legacy:/config',
+      config: {
+        host: '127.0.0.1',
+        port: 9208,
+        local_api_key: null,
+        app_proxy_url: null,
+        cors_enabled: false,
+        model_list_prefix: false,
+        kiro_preferred_endpoint: 'ide',
+        log_level: 'silent',
+        retryable_failure_cooldown_secs: 15,
+        codex_session_scoped_cooldown_enabled: false,
+        upstream_no_data_timeout_secs: 120,
+        tray_token_rate: { enabled: true, format: 'split' },
+        upstream_strategy: { order: 'fill_first', dispatch: { type: 'serial' } },
+        hot_model_mappings: {},
+        upstreams: [],
+      },
+    };
+  }
+
+  const legacy = raw as LegacyConfigPayload;
+  const addr = typeof legacy.addr === 'string' ? legacy.addr : '';
+  const hostFromAddr = addr.includes(':') ? addr.slice(0, addr.lastIndexOf(':')) : addr;
+  const portFromAddr = addr.includes(':') ? Number(addr.slice(addr.lastIndexOf(':') + 1)) : NaN;
+  const port = Number.isFinite(Number(legacy.port))
+    ? Number(legacy.port)
+    : (Number.isFinite(portFromAddr) ? portFromAddr : 9208);
+
+  return {
+    path: 'legacy:/config',
+    config: {
+      ...legacy,
+      host: hostFromAddr || '127.0.0.1',
+      port,
+      local_api_key: null,
+      app_proxy_url: null,
+      cors_enabled: false,
+      model_list_prefix: false,
+      kiro_preferred_endpoint: 'ide',
+      log_level: normalizeLogLevel(legacy.logLevel),
+      retryable_failure_cooldown_secs: Number.isFinite(Number(legacy.retryableFailureCooldown))
+        ? Number(legacy.retryableFailureCooldown)
+        : 15,
+      codex_session_scoped_cooldown_enabled: false,
+      upstream_no_data_timeout_secs: 120,
+      tray_token_rate: { enabled: true, format: 'split' },
+      upstream_strategy: { order: 'fill_first', dispatch: { type: 'serial' } },
+      hot_model_mappings: {},
+      upstreams: Array.isArray(legacy.upstreams) ? legacy.upstreams : [],
+    },
+  };
+}
+
+function normalizeLegacyHealth(raw: unknown) {
+  if (!raw || typeof raw !== 'object') {
+    return { state: 'stopped', addr: null, last_error: 'invalid health payload' };
+  }
+  const health = raw as LegacyHealthPayload;
+  return {
+    state: String(health.proxy_state ?? '').toLowerCase() === 'running' ? 'running' : 'stopped',
+    addr: health.proxy_addr ?? null,
+    last_error: health.proxy_last_error ?? null,
+  };
+}
+
 function mapAccountsPage(raw: unknown, args?: Record<string, unknown>): ProviderAccountsPage {
   const list = Array.isArray(raw) ? raw : [];
   const page = Number(args?.page ?? 1);
@@ -256,7 +349,7 @@ export async function apiClient<T = unknown>({ command, args }: InvokeOptions): 
         '/dashboard/snapshot',
       ]);
     case 'proxy_status':
-      return getJson<T>(['/health', '/api/proxy/status']);
+      return normalizeLegacyHealth(await getJson<unknown>(['/health', '/api/proxy/status'])) as T;
     case 'proxy_reload':
       return postJson<T>(['/api/proxy/reload']);
     case 'proxy_restart':
@@ -266,7 +359,7 @@ export async function apiClient<T = unknown>({ command, args }: InvokeOptions): 
     case 'proxy_stop':
       return postJson<T>(['/api/proxy/stop']);
     case 'read_proxy_config':
-      return getJson<T>(['/config', '/api/config']);
+      return normalizeLegacyConfig(await getJson<unknown>(['/config', '/api/config'])) as T;
     case 'save_proxy_config':
       return postJson<T>(['/api/config'], args?.config ?? args);
     case 'read_model_pricing_settings':
