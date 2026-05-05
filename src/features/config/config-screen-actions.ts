@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import {
   disable as disableAutostart,
   enable as enableAutostart,
@@ -15,6 +14,7 @@ import type {
 } from "@/features/config/types";
 import { extractConfigExtras, toForm } from "@/features/config/form";
 import { parseError } from "@/lib/error";
+import { apiClient, isBrowserMode } from "@/lib/apiClient";
 import { m } from "@/paraglide/messages.js";
 
 import type { AutoStartStatus, StatusState } from "./config-screen-state";
@@ -57,6 +57,13 @@ async function loadAutoStartImpl({
   setAutoStartStatus("loading");
   setAutoStartMessage("");
   try {
+    if (isBrowserMode) {
+      setAutoStartEnabled(false);
+      setAutoStartBaseline(false);
+      setAutoStartStatus("idle");
+      setAutoStartMessage("浏览器模式下不支持开机启动。");
+      return;
+    }
     const enabled = await isAutostartEnabled();
     setAutoStartEnabled(enabled);
     setAutoStartBaseline(enabled);
@@ -90,6 +97,11 @@ async function applyAutoStartChange({
   setAutoStartStatus("loading");
   setAutoStartMessage("");
   try {
+    if (isBrowserMode) {
+      setAutoStartStatus("idle");
+      setAutoStartMessage("浏览器模式下不支持开机启动。");
+      return { changed: false, error: "" };
+    }
     if (enabled) {
       await enableAutostart();
     } else {
@@ -127,7 +139,7 @@ async function loadConfigImpl({
   setStatus("loading");
   setStatusMessage("");
   try {
-    const response = await invoke<ConfigResponse>("read_proxy_config");
+    const response = await apiClient<ConfigResponse>({ command: "read_proxy_config" });
     setConfigPath(response.path);
     setForm(toForm(response.config));
     setConfigExtras(extractConfigExtras(response.config));
@@ -159,8 +171,9 @@ async function writeConfigIfDirty({
     return { saved: false, error: "" };
   }
   try {
-    const result = await invoke<SaveProxyConfigResult>("save_proxy_config", {
-      config: currentPayload,
+    const result = await apiClient<SaveProxyConfigResult>({
+      command: "save_proxy_config",
+      args: { config: currentPayload },
     });
     setProxyServiceStatus(result.status);
     setLastConfig(currentPayload);

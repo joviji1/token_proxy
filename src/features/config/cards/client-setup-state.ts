@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { apiClient, isBrowserMode } from "@/lib/apiClient";
 
 import { parseError } from "@/lib/error";
 import { m } from "@/paraglide/messages.js";
@@ -61,7 +61,10 @@ export function useClientSetupPreview(savedAt: string) {
     const requestId = requestSeq.current + 1;
     requestSeq.current = requestId;
     try {
-      const result = await invoke<ClientSetupInfo>("preview_client_setup");
+      if (isBrowserMode) {
+        throw new Error("浏览器模式下不支持本地客户端配置预览。");
+      }
+      const result = await apiClient<ClientSetupInfo>({ command: "preview_client_setup" });
       if (requestSeq.current !== requestId) {
         return;
       }
@@ -100,7 +103,10 @@ export function useWriteAction(command: WriteCommand, loadPreview: () => Promise
   const apply = useCallback(async () => {
     setAction({ state: "working", message: "", lastPath: "" });
     try {
-      const result = await invoke<ClientConfigWriteResult>(command);
+      if (isBrowserMode) {
+        throw new Error("浏览器模式下不支持本地客户端配置写入。");
+      }
+      const result = await apiClient<ClientConfigWriteResult>({ command });
       const path = result.paths.join(", ");
       setAction({ state: "success", message: m.client_setup_apply_success({ path }), lastPath: path });
       await loadPreview();

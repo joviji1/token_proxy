@@ -18,7 +18,7 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {import.meta.env.DEV && (
+    {import.meta.env.DEV && import.meta.env.VITE_ENABLE_AGENTATION === 'true' && (
       <Agentation
         endpoint="http://localhost:4747"
         onSessionCreated={(sessionId) => {

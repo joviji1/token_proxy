@@ -6,6 +6,8 @@ import path from "path";
 import { defineConfig } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
+const port = Number(process.env.PORT || 21420);
+const managementTarget = process.env.TOKEN_PROXY_MGMT_TARGET || "http://127.0.0.1:19208";
 
 const EMPTY_RUNTIME_SOURCEMAP = JSON.stringify({
   version: 3,
@@ -23,7 +25,6 @@ const EMPTY_SERVER_SOURCEMAP = JSON.stringify({
   mappings: "",
 });
 
-// https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
     paraglideVitePlugin({
@@ -31,11 +32,8 @@ export default defineConfig(async () => ({
       outdir: "./src/paraglide",
       strategy: ["localStorage", "preferredLanguage", "baseLocale"],
       emitTsDeclarations: true,
-      // Paraglide runtime.js 内部带有 `//# sourceMappingURL=strategy.js.map`，但默认不会输出 .map 文件。
-      // Vite dev 会尝试读取该 map，导致控制台出现 ENOENT 警告；这里写入一个空 map 用于消噪。
       additionalFiles: {
         "strategy.js.map": EMPTY_RUNTIME_SOURCEMAP,
-        // server.js 同理（仅在被引入时会触发）
         "middleware.js.map": EMPTY_SERVER_SOURCEMAP,
       },
       outputStructure: "message-modules",
@@ -54,29 +52,28 @@ export default defineConfig(async () => ({
     },
   },
   build: {
-    // Tauri 桌面包本地分发，且配置页已经按路由懒加载；当前最大 chunk 属于可接受范围。
-    // 将阈值调到接近现状，避免稳定可接受的大包持续污染构建输出。
     chunkSizeWarningLimit: 900,
   },
-
-  // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
-  //
-  // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
   server: {
-    port: 1420,
+    port,
     strictPort: true,
-    host: host || false,
+    host: host || "0.0.0.0",
+    proxy: {
+      "/_tp": {
+        target: managementTarget,
+        changeOrigin: true,
+        rewrite: (inputPath) => inputPath.replace(/^\/_tp/, ""),
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: port + 1,
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },

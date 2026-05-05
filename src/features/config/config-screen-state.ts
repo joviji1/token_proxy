@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { apiClient } from "@/lib/apiClient";
 
 import { type StatusBadge } from "@/features/config/cards";
 import {
@@ -151,7 +151,7 @@ export function useProxyServiceActions({
     setProxyServiceRequestState("working");
     setProxyServiceMessage("");
     try {
-      const status = await invoke<ProxyServiceStatus>("proxy_status");
+      const status = await apiClient<ProxyServiceStatus>({ command: "proxy_status" });
       setProxyServiceStatus(status);
       setProxyServiceRequestState("idle");
     } catch (error) {
@@ -165,7 +165,7 @@ export function useProxyServiceActions({
       setProxyServiceRequestState("working");
       setProxyServiceMessage("");
       try {
-        const status = await invoke<ProxyServiceStatus>(command);
+        const status = await apiClient<ProxyServiceStatus>({ command });
         setProxyServiceStatus(status);
         setProxyServiceRequestState("idle");
       } catch (error) {

@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef } from "react";
 
 import { AppView } from "@/features/config/AppView";
@@ -17,6 +16,7 @@ import { useCodexAccounts } from "@/features/codex/use-codex-accounts";
 import { useKiroAccounts } from "@/features/kiro/use-kiro-accounts";
 import { useUpdater } from "@/features/update/updater";
 import { parseError } from "@/lib/error";
+import { apiClient } from "@/lib/apiClient";
 
 type ConfigScreenProps = {
   activeSectionId: ConfigSectionId;
@@ -120,7 +120,7 @@ export function ConfigScreen({ activeSectionId }: ConfigScreenProps) {
     setStatus("loading");
     setStatusMessage("");
     try {
-      const mappings = await invoke<Record<string, string>>("read_default_hot_model_mappings");
+      const mappings = await apiClient<Record<string, string>>({ command: "read_default_hot_model_mappings" });
       const hotModelMappings = Object.entries(mappings)
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([pattern, target]) => createModelMapping(pattern, target));
